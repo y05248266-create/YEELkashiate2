@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>歌詞ゲームランキング</title>
+
+<style>
+
+body{
+    font-family:sans-serif;
+    background:#f4f4f9;
+    text-align:center;
+    padding:20px;
+}
+
+.container{
+    max-width:1200px;
+    margin:auto;
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 0 10px rgba(0,0,0,.1);
+}
+
+input{
+    padding:10px;
+    margin:5px;
+}
+
+.answer-area{
+    display:flex;
+    gap:10px;
+    overflow-x:auto;
+    padding:15px;
+    background:#eef;
+    border-radius:10px;
+    margin-bottom:20px;
+}
+
+.slot{
+    min-width:180px;
+    min-height:80px;
+    border:3px dashed #4a90e2;
+    border-radius:10px;
+    background:white;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+
+    padding:10px;
+    cursor:pointer;
+
+    flex-shrink:0;
+}
+
+.correct{
+    background:#d4edda;
+}
+
+.wrong{
+    background:#f8d7da;
+}
+
+.cards{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:center;
+}
+
+.card{
+    background:#4a90e2;
+    color:white;
+    padding:10px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.card:hover{
+    background:#357abd;
+}
+
+button{
+    padding:10px 20px;
+    margin:10px;
+    cursor:pointer;
+}
+
+#timer{
+    font-size:24px;
+    font-weight:bold;
+    margin:10px;
+}
+
+#ranking,
+#classRanking{
+    margin:20px auto;
+    max-width:650px;
+    text-align:left;
+    background:#fafafa;
+    padding:15px;
+    border-radius:10px;
+}
+
+.rank-item{
+    padding:6px;
+    border-bottom:1px solid #ddd;
+}
+
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>🎵 歌詞ゲームランキング</h1>
+
+<div>
+    <input id="nickname" placeholder="ニックネーム">
+    <input id="classname" placeholder="学級(例:3年1組)">
+</div>
+
+<div id="timer">⏱ 0秒</div>
+<div id="best"></div>
+
+<div id="answerArea" class="answer-area"></div>
+
+<div id="cardArea" class="cards"></div>
+
+<button onclick="checkAnswer()">答え合わせ</button>
+<button onclick="startGame()">シャッフル</button>
+
+<div id="result"></div>
+
+<h2>🏆 個人ランキング</h2>
+<div id="ranking"></div>
+
+<h2>🏫 学級ランキング</h2>
+<div id="classRanking"></div>
+
+</div>
+
+<script>
+
+/* GASのURLを貼る */
+const API_URL =
+"https://script.google.com/macros/s/AKfycby5p-UqtVer3NbVvlUTis3tKTPkf39KKtPbrVFxZ9lZy80GCQOK_8QITAtYblVkHrsIgg/exec";
+
+/* 歌詞を入れる */
+const correctOrder = [
+'「"わたし"は今　どこにあるの」と',
+'ふみしめた足あとを　何度もみつめかえす',
+'かれはをだき 秋めくまどべに',
+'かじかんだ指先で夢をえがいた',
+
+'つばさはあるのに飛べずにいるんだ',
+'１人になるのがこわくてつらくて',
+'優しいひだまりに　かたよせる日々を',
+'こえて　僕ら　こどくなゆめへと　歩く',
+
+'①サヨナラは悲しい言葉じゃない',
+'①それぞれの夢へと　僕らをつなぐYELL',
+
+'①ともにすごした日々を胸に抱いて',
+'①飛び立つよひとりでつぎの　空へ',
+
+'僕らは　なぜ　答えをあせって',
+'あての無い暗がりに　じぶんを探すのだろう',
+
+'誰かを　ただ　おもう涙も',
+'真っすぐな笑顔も　ここにあるのに',
+
+'えいえんなど無いと（気づいたときから）',
+'笑いあったあの日も（うたい合ったあの日も）',
+'強く（深く）胸に　きざまれていく',
+'だからこそあなたは（だからこそ僕らは）',
+'他の誰でもない（誰にも負けない）',
+'声を（あげて）',
+'わたしを生きていくよと（生きていくよと）',
+'約束したんだ',
+'ひとり（ひとり）ひとつ（ひとつ）',
+'道を　選んだ',
+
+'②サヨナラは悲しい言葉じゃない',
+'②それぞれの夢へと僕らをつなぐ　YELL',
+
+'いつかまためぐりあうそのときまで',
+'忘れはしないほこりよ　友よ　空へ',
+
+'僕らが分かち合う言葉がある',
+'こころからこころへ声をつなぐ　YELL',
+
+'②ともに過ごした日々を胸に抱いて',
+'②飛び立つよ　独りで　未来の　空へ'
+
+];
+
+let cards = [];
+let answers = [];
+let startTime;
+let timerId;
+
+function shuffle(array){
+
+    return [...array]
+    .sort(()=>Math.random()-0.5);
+
+}
+
+function startGame(){
+
+    cards = shuffle(correctOrder);
+
+    answers =
+    new Array(correctOrder.length).fill("");
+
+    document.getElementById("result").textContent="";
+
+    startTime = Date.now();
+
+    clearInterval(timerId);
+
+    timerId=setInterval(()=>{
+
+        const sec=
+        Math.floor(
+            (Date.now()-startTime)/1000
+        );
+
+        document.getElementById("timer")
+        .textContent=`⏱ ${sec}秒`;
+
+    },1000);
+
+    renderSlots();
+    renderCards();
+}
+
+function renderSlots(){
+
+    const area =
+    document.getElementById("answerArea");
+
+    area.innerHTML="";
+
+    answers.forEach((item,index)=>{
+
+        const div =
+        document.createElement("div");
+
+        div.className="slot";
+
+        if(item){
+
+            if(item===correctOrder[index]){
+                div.classList.add("correct");
+            }else{
+                div.classList.add("wrong");
+            }
+
+        }
+
+        div.textContent =
+        item || `□${index+1}`;
+
+        div.onclick=()=>{
+
+            if(item){
+
+                cards.push(item);
+
+                answers[index]="";
+
+                renderSlots();
+                renderCards();
+            }
+
+        };
+
+        area.appendChild(div);
+
+    });
+
+}
+
+function renderCards(){
+
+    const area =
+    document.getElementById("cardArea");
+
+    area.innerHTML="";
+
+    cards.forEach((card,index)=>{
+
+        const div =
+        document.createElement("div");
+
+        div.className="card";
+
+        div.textContent=card;
+
+        div.onclick=()=>{
+
+            const empty =
+            answers.findIndex(
+                a=>a===""
+            );
+
+            if(empty!==-1){
+
+                answers[empty]=card;
+
+                cards.splice(index,1);
+
+                renderSlots();
+                renderCards();
+            }
+
+        };
+
+        area.appendChild(div);
+
+    });
+
+}
+
+async function saveScore(time){
+
+    const nickname =
+    document.getElementById("nickname")
+    .value.trim();
+
+    const classname =
+    document.getElementById("classname")
+    .value.trim();
+
+    if(!nickname || !classname){
+
+        alert(
+            "ニックネームと学級を入力してください"
+        );
+
+        return;
+    }
+
+    await fetch(API_URL,{
+        method:"POST",
+        body:JSON.stringify({
+            nickname,
+            classname,
+            time
+        })
+    });
+
+}
+
+async function loadRanking(){
+
+    try{
+
+        const res =
+        await fetch(API_URL);
+
+        const data =
+        await res.json();
+
+        let html="";
+
+        data.rankings.forEach((r,i)=>{
+
+            html += `
+            <div class="rank-item">
+            ${i+1}位　
+            ${r.nickname}
+            (${r.classname})
+            　
+            ${r.time}秒
+            </div>`;
+
+        });
+
+        document.getElementById("ranking")
+        .innerHTML = html;
+
+        let classHtml="";
+
+        data.classes.forEach((c,i)=>{
+
+            classHtml += `
+            <div class="rank-item">
+            ${i+1}位　
+            ${c.classname}
+            　
+            平均 ${c.avg}秒
+            </div>`;
+
+        });
+
+        document.getElementById("classRanking")
+        .innerHTML = classHtml;
+
+    }catch(err){
+
+        console.log(err);
+
+    }
+
+}
+
+async function checkAnswer(){
+
+    const correct =
+    answers.every(
+        (a,i)=>a===correctOrder[i]
+    );
+
+    const result =
+    document.getElementById("result");
+
+    if(!correct){
+
+        result.style.color="red";
+        result.textContent=
+        "❌ 順番が違います";
+
+        return;
+    }
+
+    clearInterval(timerId);
+
+    const time = Math.floor(
+        (Date.now()-startTime)/1000
+    );
+
+    result.style.color="green";
+
+    result.textContent =
+    `🎉 正解！ ${time}秒`;
+
+    const best =
+    localStorage.getItem("best");
+
+    if(!best || time<Number(best)){
+
+        localStorage.setItem(
+            "best",
+            time
+        );
+    }
+
+    document.getElementById("best")
+    .textContent =
+    `自己ベスト: ${localStorage.getItem("best")}秒`;
+
+    await saveScore(time);
+
+    await loadRanking();
+
+}
+
+startGame();
+loadRanking();
+
+setInterval(loadRanking,5000);
+
+</script>
+
+</body>
+</html>
